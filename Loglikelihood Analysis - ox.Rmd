@@ -1,0 +1,326 @@
+---
+title: "Assignment 2- OX"
+author: "Owen Xu"
+date: "04/09/2019"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+###Question 1
+This question works with a data set on sodium intake.
+
+```{r }
+##Read data
+sodium <- read.table("sodium.txt", header=TRUE)
+
+##Check the first few rows of data          
+head(sodium)
+
+##get unique combination of 1st and 2nd columns
+unique(sodium[,c("Instructor","Supplement")])
+
+##get the index as numeric values 
+ind = as.numeric(rownames(unique(sodium[,c("Instructor","Supplement")])))
+                 
+##find the Sodium values
+data = sodium[ind,"Sodium"]
+
+##create the matrix by row
+sodiumMat = matrix(data,ncol = 4,byrow = TRUE)
+
+##name the matrix
+colnames(sodiumMat) = c("A","B","C","D")
+rownames(sodiumMat) = unique(sodium[,"Instructor"])
+names(dimnames(sodiumMat)) <- c("Instructor","Supplement")
+
+##show the matrix
+sodiumMat
+
+```
+
+fit the model:
+
+
+```{r question 1}
+##get total mean miu and sweep 
+miu = mean(sodiumMat)
+sodiumMat = sweep(sodiumMat,2, miu,FUN = "-")
+
+##get the row mean alpha
+alpha = apply(sodiumMat,1,mean)
+
+##get the column mean beta
+beta = apply(sodiumMat,2,mean)
+
+##sweep both values
+sodiumMat = sweep(sodiumMat,1,alpha,FUN = "-")
+sodiumMat = sweep(sodiumMat,2,beta,FUN = "-")
+
+##show final fitted matrix
+sodiumMat
+
+```
+This does not look like the model that works because the residuals can be quite large for each instructor.
+
+
+###Question 2
+This question works with a set of plant weights, measured under two experimental conditions.
+
+```{r}
+## Annette Dobson (1990) "An Introduction to Generalized Linear Models".
+## Page 9: Plant Weight Data.
+## Control = standard conditions
+## Treatment = nutrient rich
+ctl <- c(4.17,5.58,5.18,6.11,4.50,4.61,5.17,4.53,5.33,5.14)
+trt <- c(4.81,4.17,4.41,3.59,5.87,3.83,6.03,4.89,4.32,4.69)
+group <- gl(2, 10, 20, labels = c("Ctl","Trt"))
+weight <- c(ctl, trt)
+```
+
+We will first assume that all weights are i.i.d. Normal(μ, σ). We will further assume that σ is the sample standard deviation.
+```{r}
+sigma <- sd(weight)
+
+```
+##like function that calculates the likelihood
+```{r}
+like <- function(x,mean){
+  prod(dnorm(x,mean,sigma))
+}
+
+##test
+like(weight,0)
+like(weight,4)
+```
+
+
+```{r}
+##plot mu = 0
+
+par(mfrow = c(1,2))
+plot(weight,dnorm(weight,0,sigma),ylab = "density", type="h",main = expression(mu==0))
+
+##plot mu = 4
+plot(weight,dnorm(weight,4,sigma),ylab = "density", type="h",main = expression(mu==4))
+
+##plot likelihood for mu = 0 - 6
+##assign 51 data points between 0 and 6
+x = seq(0,6,length = 51)
+len = length(x)
+likevec = numeric(len)
+
+##get likelihood values into a vector for plot
+for( i in 1:len)
+  likevec[i] = like(weight,x[i])
+
+##plot
+plot(seq(0,6,length = 51),likevec, type="l",xlab = expression(mu),ylab = "Likelihood")
+
+```
+##log likelihood function
+```{r}
+loglike <- function(x,mean){
+  sum(dnorm(x,mean,sigma,log= TRUE))
+}
+
+#tests
+loglike(weight,0)
+loglike(weight,4)
+```
+##plot
+
+```{r}
+
+par(mfrow = c(1,2))
+##plot mu = 0
+plot(weight,dnorm(weight,0,sigma, log = TRUE),ylab = "log density", type="h",main = expression(mu==0))
+
+##plot mu = 4
+plot(weight,dnorm(weight,4,sigma, log = TRUE),ylab = "log density", type="h",main = expression(mu==4))
+
+##plot log likelihood for mu = 0 - 6
+##assign 51 data points between 0 and 6
+x = seq(0,6,length = 51)
+len = length(x)
+loglikevec = numeric(len)
+
+##get likelihood values into a vector for plot
+for( i in 1:len)
+  loglikevec[i] = loglike(weight,x[i])
+
+##plot
+plot(seq(0,6,length = 51),loglikevec, type="l",xlab = expression(mu),ylab = "Log-Likelihood")
+
+```
+Use the optimise function to find the maximum likelihood estimate of μ (find the value
+of μ that maximises the log-likelihood function).
+```{r}
+muMLE = optimise(loglike, c(0,6),x = weight, maximum = TRUE)
+
+##muMLE equals mean of weight
+muMLE == mean(weight)
+
+```
+Write a function dllike that calculates this 1st derivative and use uniroot to find where this function is zero.
+
+```{r}
+##dllike function
+##dllike <- function (m) deriv(loglike(weight,m),"m")
+dllike <- function(mean) sum(weight) - length(weight)*mean
+uniroot(dllike,lower = -10,upper = 10,tol = 1e-20)
+
+```
+###Question 3
+This question also works with the set of plant weights and we will still assume that all
+weights are i.i.d. Normal(μ, σ).
+However, we will now estimate both μ and σ using maximum likelihood.
+```{r loglike2}
+par(mfrow = c(2,2))
+
+##define function loglike2
+loglike2 <- function(x,mean,sigma){
+  
+  ##Recycle
+  n = length(x)
+
+  maxlen = length(mean)
+  
+  sigma = rep(sigma,maxlen)
+  
+  ##Vector calcs
+  ans = dnorm(rep(x,maxlen),rep(mean,each = n),rep(sigma, each = n),log= TRUE)
+
+  dim(ans) = c(n,maxlen)
+  
+  colSums(ans)
+  
+}
+
+#evaluate (0,1) and (4,1)
+loglike2(weight,0,1)
+loglike2(weight,4,1)
+
+#plot
+plot(weight,dnorm(weight,0,1, log = TRUE),ylab = "log density", type="h",main = expression(paste(mu == 0,";",sigma == 1)))
+plot(weight,dnorm(weight,4,1, log = TRUE),ylab = "log density", type="h",main = expression(paste(mu == 4,";",sigma == 1)))
+
+#plot mu ~ (0 - 6) for sigma = 1 and 0.5
+plot(seq(0,6,length = 51),loglike2(weight,mean = seq(0,6,length=51),sigma = 1), type="l",xlab = expression(mu),ylab = "Log-Likelihood", main = expression(sigma == 1))
+plot(seq(0,6,length = 51),loglike2(weight,mean = seq(0,6,length=51),sigma = 0.5), type="l",xlab = expression(mu),ylab = "Log-Likelihood", main = expression(sigma == 0.5))
+
+
+
+```
+
+
+Use the optim function to find the maximum likelihood estimates for μ and σ.
+
+```{r}
+##rewrite loglike2 function
+loglike2 <- function(x,theta){
+  
+sum(dnorm(x, theta[1], theta[2], log=TRUE))
+  
+}
+
+##use optim;by observation from the above figure (5,1) is  a good starting points.
+muSigmaMLE = optim(c(5,1),loglike2,x = weight, control=list(fnscale = -1))
+
+muSigmaMLE$par
+
+##compare
+mean(weight)
+sd(weight)
+sd(weight)*sqrt((length(weight) - 1)/length(weight))
+
+```
+###Question 4
+This question also works with the set of plant weights, but now we will allow there to be
+a separate mean for the treatment and control groups.
+
+```{r}
+
+par(mfrow = c(2,2))
+
+loglike3 <- function(x,g,b0,b1,sigma) {
+  
+  
+  ##Recycle
+  n = length(x)
+
+  maxlen = length(b0)
+  
+  mean = rep(b0,each = n) + rep(g,maxlen) * b1 
+
+  print(maxlen)
+  
+  sigma = rep(sigma,maxlen)
+  
+  ##Vector calcs
+  ans = dnorm(rep(x,maxlen),mean,rep(sigma, each = n),log = TRUE)
+
+  dim(ans) = c(n,maxlen)
+  
+  print(colSums(ans))
+  
+}
+
+##calculate
+ gp <- as.numeric(group) - 1
+ 
+ loglike3(weight, gp, 0, 1, 1)
+
+ loglike3(weight, gp, 4, 1, 1)
+
+##plot
+ 
+ mean1 = 0 + gp * 1
+ plot(weight,dnorm(weight,mean1,1,log = TRUE),ylab = "log density", type="h",main = expression(paste("b0 = 0",";","b1 = 1",";",sigma == 1)))
+ 
+ mean2 = 4 + gp * 1
+ 
+ plot(weight,dnorm(weight,mean2,1,log = TRUE),ylab = "log density", type="h",main = expression(paste("b0 = 4",";","b1 = 1",";",sigma==1)))
+
+#plot b0 ~ (0 - 6) for b1=1,sigma=1 and b1=0,sigma=1
+
+ plot(seq(0,6,length = 51),loglike3(weight,b0 = seq(0,6,length = 51),g = gp,b1 = 0,sigma = 1), type="l",xlab = "b0",ylab =   
+ "Log-Likelihood", main = expression(paste("b1 = 1",";",sigma == 1)))
+ 
+ plot(seq(0,6,length = 51),loglike3(weight,b0 = seq(0,6,length = 51),g = gp,b1 = 1,sigma = 1), type="l",xlab = "b0",ylab = 
+ "Log-Likelihood", main = expression(paste("b1 = 0",";",sigma == 1)))
+ 
+ 
+```
+
+```{r}
+##rewrite loglike3 function
+loglike3 <- function(dat,g,theta){
+
+#gp <- as.numeric(group) - 1
+
+mean = theta[1] + g * theta[2]
+  
+sum(dnorm(dat, mean, theta[3], log = TRUE))
+  
+}
+
+##optimize;by observation from the above figure (4.5,0,1) is a good starting points.
+
+params = optim(par = c(4.5,0,1), function(x) loglike3(weight, gp, x) ,control = list(fnscale = -1))
+params$par
+
+##compare
+lm.D9 <- lm(weight ~ group)
+coef(lm.D9)
+
+```
+
+
+
